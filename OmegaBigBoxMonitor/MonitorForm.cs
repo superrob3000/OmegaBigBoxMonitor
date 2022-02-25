@@ -143,7 +143,7 @@ namespace OmegaBigBoxMonitor
             {
                 String eventDescription = arg.EventRecord.FormatDescription();
 
-                if (eventDescription.Contains("BigBox"))
+                if (eventDescription.Contains("BigBox")&& !eventDescription.Contains("BigBoxWithStartupMarquee"))
                 {
                     Log("BigBox crash and recovery at " + DateTime.Now);
                     Log(eventDescription);
