@@ -10,6 +10,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Xml.Linq;
+using System.Xml.XPath;
 
 namespace OmegaBigBoxMonitor
 {
@@ -138,6 +140,25 @@ namespace OmegaBigBoxMonitor
         public void EventLogEventRead(object obj,
             EventRecordWrittenEventArgs arg)
         {
+            //Check if BigBoxMonitor is enabled. If not, that means the crash
+            //happened during shutdown so we can ignore it.
+            bool monitor_enabled = false;
+            String xml_path = System.IO.Directory.GetParent(Path.GetDirectoryName(Application.ExecutablePath)).ToString() + "/Data/OmegaBigBoxMonitor.xml";
+            XDocument xSettingsDoc;
+            try { xSettingsDoc = XDocument.Load(xml_path); }
+            catch { xSettingsDoc = null; }
+
+            if (xSettingsDoc != null)
+            {
+                String val = xSettingsDoc
+                    .XPathSelectElement("/OmegaBigBoxMonitorSettings")
+                    .Element("Enabled").
+                    Value;
+
+                if(val.Equals("True"))
+                    monitor_enabled = true;
+            }
+
             // Make sure there was no error reading the event.
             if (arg.EventRecord != null)
             {
@@ -145,30 +166,39 @@ namespace OmegaBigBoxMonitor
 
                 if (eventDescription.Contains("BigBox")&& !eventDescription.Contains("BigBoxWithStartupMarquee"))
                 {
-                    Log("BigBox crash and recovery at " + DateTime.Now);
-                    Log(eventDescription);
-                    Log("---------------------------");
-
-                    //Start external program which kills and restarts BigBox.
-                    Process ps_bigbox = null;
-                    ps_bigbox = new Process();
-                    ps_bigbox.StartInfo.UseShellExecute = false;
-                    ps_bigbox.StartInfo.RedirectStandardInput = false;
-                    ps_bigbox.StartInfo.RedirectStandardOutput = false;
-                    ps_bigbox.StartInfo.CreateNoWindow = true;
-                    ps_bigbox.StartInfo.UserName = null;
-                    ps_bigbox.StartInfo.Password = null;
-                    ps_bigbox.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-                    ps_bigbox.StartInfo.Arguments = "\"(Restarting BigBox)\"";
-                    ps_bigbox.StartInfo.FileName = LaunchBoxPath + "/RebootBigBox.exe";
-
-                    if (File.Exists(ps_bigbox.StartInfo.FileName))
+                    if (monitor_enabled == false)
                     {
-                        bool result = ps_bigbox.Start();
+                        Log("BigBox crash duing shutdown was ignored at " + DateTime.Now);
+                        Log(eventDescription);
+                        Log("---------------------------");
                     }
                     else
                     {
-                        MessageBox.Show("Missing " + ps_bigbox.StartInfo.FileName);
+                        Log("BigBox crash and recovery at " + DateTime.Now);
+                        Log(eventDescription);
+                        Log("---------------------------");
+
+                        //Start external program which kills and restarts BigBox.
+                        Process ps_bigbox = null;
+                        ps_bigbox = new Process();
+                        ps_bigbox.StartInfo.UseShellExecute = false;
+                        ps_bigbox.StartInfo.RedirectStandardInput = false;
+                        ps_bigbox.StartInfo.RedirectStandardOutput = false;
+                        ps_bigbox.StartInfo.CreateNoWindow = true;
+                        ps_bigbox.StartInfo.UserName = null;
+                        ps_bigbox.StartInfo.Password = null;
+                        ps_bigbox.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+                        ps_bigbox.StartInfo.Arguments = "\"(Restarting BigBox)\"";
+                        ps_bigbox.StartInfo.FileName = LaunchBoxPath + "/RebootBigBox.exe";
+
+                        if (File.Exists(ps_bigbox.StartInfo.FileName))
+                        {
+                            bool result = ps_bigbox.Start();
+                        }
+                        else
+                        {
+                            MessageBox.Show("Missing " + ps_bigbox.StartInfo.FileName);
+                        }
                     }
 
                 }
