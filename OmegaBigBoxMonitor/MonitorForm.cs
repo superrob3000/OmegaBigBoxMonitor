@@ -143,7 +143,7 @@ namespace OmegaBigBoxMonitor
             //Check if BigBoxMonitor is enabled. If not, that means the crash
             //happened during shutdown so we can ignore it.
             bool monitor_enabled = false;
-            String xml_path = System.IO.Directory.GetParent(Path.GetDirectoryName(Application.ExecutablePath)).ToString() + "/Data/OmegaBigBoxMonitor.xml";
+            String xml_path = LaunchBoxPath + "/Data/OmegaBigBoxMonitor.xml";
             XDocument xSettingsDoc;
             try { xSettingsDoc = XDocument.Load(xml_path); }
             catch { xSettingsDoc = null; }
