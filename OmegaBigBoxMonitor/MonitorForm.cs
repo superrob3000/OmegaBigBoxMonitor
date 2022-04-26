@@ -113,7 +113,9 @@ namespace OmegaBigBoxMonitor
             try
             {
                 EventLogQuery subscriptionQuery =
-                    new EventLogQuery("Application", PathType.LogName, "*[System/Provider/@Name=\"Application Error\"]");
+//                  new EventLogQuery("Application", PathType.LogName, "*[System/Provider/@Name=\"Application Error\"]");
+                    new EventLogQuery("Application", PathType.LogName, "*[System/Level=2]");
+                
 
                 watcher = new EventLogWatcher(subscriptionQuery);
 
