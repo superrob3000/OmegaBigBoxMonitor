@@ -46,7 +46,8 @@ namespace OmegaBigBoxMonitor
             LaunchBoxPath = Path.GetDirectoryName(Application.ExecutablePath).ToString();
             Log("Monitor started at " + DateTime.Now);
             Log("---------------------------");
-            this.subscribe();
+            this.subscribe_to_application_log();
+            this.subscribe_to_system_log();
         }
         private void MonitorForm_FormClosing(object sender, FormClosingEventArgs e)
         {
@@ -107,7 +108,7 @@ namespace OmegaBigBoxMonitor
         }
 
 
-        public void subscribe()
+        public void subscribe_to_application_log()
         {
             EventLogWatcher watcher = null;
             try
@@ -124,22 +125,52 @@ namespace OmegaBigBoxMonitor
                 // (EventLogEventRead) is called.
                 watcher.EventRecordWritten +=
                     new EventHandler<EventRecordWrittenEventArgs>(
-                        EventLogEventRead);
+                        ApplicationEventLogEventRead);
 
                 // Activate the subscription
                 watcher.Enabled = true;
             }
             catch
             {
-                MessageBox.Show("Error subscribing to the event log.");
+                MessageBox.Show("Error subscribing to the Application event log.");
                 this.Close();
             }
         }
 
-        
+        public void subscribe_to_system_log()
+        {
+            EventLogWatcher watcher = null;
+            try
+            {
+                //Susbscribe to resource exhaustion event (2004)
+                EventLogQuery subscriptionQuery =
+                    new EventLogQuery("System", PathType.LogName, "*[System/EventID=2004]");
+
+
+                watcher = new EventLogWatcher(subscriptionQuery);
+
+                // Make the watcher listen to the EventRecordWritten
+                // events.  When this event happens, the callback method
+                // (EventLogEventRead) is called.
+                watcher.EventRecordWritten +=
+                    new EventHandler<EventRecordWrittenEventArgs>(
+                        SystemEventLogEventRead);
+
+                // Activate the subscription
+                watcher.Enabled = true;
+            }
+            catch
+            {
+                MessageBox.Show("Error subscribing to the System event log.");
+                this.Close();
+            }
+        }
+
+
+
         // Callback method that gets executed when an event is
         // reported to the subscription.
-        public void EventLogEventRead(object obj,
+        public void ApplicationEventLogEventRead(object obj,
             EventRecordWrittenEventArgs arg)
         {
             //Check if BigBoxMonitor is enabled. If not, that means the crash
@@ -206,6 +237,77 @@ namespace OmegaBigBoxMonitor
                 }
             }
         }
+
+        // Callback method that gets executed when an event is
+        // reported to the subscription.
+        public void SystemEventLogEventRead(object obj,
+            EventRecordWrittenEventArgs arg)
+        {
+            //Check if BigBoxMonitor is enabled. If not, that means the crash
+            //happened during shutdown so we can ignore it.
+            bool monitor_enabled = false;
+            String xml_path = LaunchBoxPath + "/Data/OmegaBigBoxMonitor.xml";
+            XDocument xSettingsDoc;
+            try { xSettingsDoc = XDocument.Load(xml_path); }
+            catch { xSettingsDoc = null; }
+
+            if (xSettingsDoc != null)
+            {
+                String val = xSettingsDoc
+                    .XPathSelectElement("/OmegaBigBoxMonitorSettings")
+                    .Element("Enabled").
+                    Value;
+
+                if (val.Equals("True"))
+                    monitor_enabled = true;
+            }
+
+            // Make sure there was no error reading the event.
+            if (arg.EventRecord != null)
+            {
+                String eventDescription = arg.EventRecord.FormatDescription();
+
+                if (eventDescription.Contains("BigBox") && !eventDescription.Contains("BigBoxWithStartupMarquee"))
+                {
+                    if (monitor_enabled == false)
+                    {
+                        Log("BigBox crash duing shutdown was ignored at " + DateTime.Now);
+                        Log(eventDescription);
+                        Log("---------------------------");
+                    }
+                    else
+                    {
+                        Log("BigBox restarting due to low memory at " + DateTime.Now);
+                        Log(eventDescription);
+                        Log("---------------------------");
+
+                        //Start external program which kills and restarts BigBox.
+                        Process ps_bigbox = null;
+                        ps_bigbox = new Process();
+                        ps_bigbox.StartInfo.UseShellExecute = false;
+                        ps_bigbox.StartInfo.RedirectStandardInput = false;
+                        ps_bigbox.StartInfo.RedirectStandardOutput = false;
+                        ps_bigbox.StartInfo.CreateNoWindow = true;
+                        ps_bigbox.StartInfo.UserName = null;
+                        ps_bigbox.StartInfo.Password = null;
+                        ps_bigbox.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+                        ps_bigbox.StartInfo.Arguments = "\"(Restarting BigBox)\"";
+                        ps_bigbox.StartInfo.FileName = LaunchBoxPath + "/RebootBigBox.exe";
+
+                        if (File.Exists(ps_bigbox.StartInfo.FileName))
+                        {
+                            bool result = ps_bigbox.Start();
+                        }
+                        else
+                        {
+                            MessageBox.Show("Missing " + ps_bigbox.StartInfo.FileName);
+                        }
+                    }
+
+                }
+            }
+        }
+
         public void Log(String info)
         {
             String LogFileName = LaunchBoxPath + "/Logs/BigBoxMonitorLog.txt";
